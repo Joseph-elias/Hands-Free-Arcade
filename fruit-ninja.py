@@ -2,139 +2,146 @@ import cv2
 import mediapipe as mp
 import pyautogui
 from math import hypot
-import time
+from time import time
 
-# Initialize MediaPipe Hand Detection
-mp_hands = mp.solutions.hands
-hands = mp_hands.Hands()
 
-# Initialize MediaPipe Drawing
-mp_drawing = mp.solutions.drawing_utils
+# Mouse responsiveness tuning.
+CURSOR_SMOOTHING = 0.35
+MOVE_SENSITIVITY = 1.25
+PINCH_DOWN_THRESHOLD = 35
+PINCH_UP_THRESHOLD = 50
+SWIPE_DISTANCE_THRESHOLD = 95
+SWIPE_SPEED_THRESHOLD = 900  # pixels per second
+SWIPE_COOLDOWN = 0.25
+CAMERA_INDEX = 0
 
-# Start capturing video from webcam
-cap = cv2.VideoCapture(0)
 
-# Store previous finger positions to calculate movement
-prev_index_finger = None
-prev_middle_finger = None
-prev_time = None
+def lerp_point(prev, curr, alpha):
+    if prev is None:
+        return curr
+    x = int(prev[0] + (curr[0] - prev[0]) * alpha)
+    y = int(prev[1] + (curr[1] - prev[1]) * alpha)
+    return (x, y)
 
-# Sensitivity factor (higher value = more sensitive)
-SENSITIVITY = 1.5  # You can experiment with different values
 
-# Thresholds for gesture detection
-SWIPE_DISTANCE_THRESHOLD = 60  # Minimum pixel movement for swipe
-SWIPE_VELOCITY_THRESHOLD = 0.7  # Minimum velocity (pixels/ms) for swipe
-SWIPE_COOLDOWN = 0.5  # Seconds between swipes
-CLICK_THRESHOLD = 20  # Distance for "click" gesture
+def clamp_screen(x, y, width, height):
+    return max(0, min(width - 1, x)), max(0, min(height - 1, y))
 
-last_swipe_time = 0
 
-# Get the screen size
-screen_width, screen_height = pyautogui.size()
+def main():
+    mp_hands = mp.solutions.hands
+    pyautogui.PAUSE = 0
+    screen_width, screen_height = pyautogui.size()
 
-def simulate_swipe(start, end):
-    # Calculate the movement of the finger
-    dx = (end[0] - start[0]) * SENSITIVITY  # Apply sensitivity to horizontal movement
-    dy = (end[1] - start[1]) * SENSITIVITY  # Apply sensitivity to vertical movement
+    cap = cv2.VideoCapture(CAMERA_INDEX)
+    if not cap.isOpened():
+        raise RuntimeError("Could not open webcam. Check camera permissions/device index.")
 
-    # Simulate a swipe from start to end coordinates using PyAutoGUI
-    pyautogui.moveTo(start[0], start[1])  # Move the mouse to the starting point
-    pyautogui.dragTo(start[0] + dx, start[1] + dy, duration=0.3)  # Drag the mouse to the end point
+    last_cursor = None
+    prev_index_px = None
+    prev_time = time()
+    last_swipe_time = 0.0
+    mouse_down = False
+    status = "Searching hand..."
 
-def simulate_click(start):
-    # Simulate a click (press and release)
-    pyautogui.moveTo(start[0], start[1])  # Move the mouse to the click position
-    pyautogui.mouseDown()  # Press the mouse button
-    pyautogui.mouseUp()    # Release the mouse button
+    with mp_hands.Hands(
+        max_num_hands=1,
+        min_detection_confidence=0.65,
+        min_tracking_confidence=0.65,
+    ) as hands:
+        while True:
+            ok, frame = cap.read()
+            if not ok:
+                continue
 
-while True:
-    ret, frame = cap.read()
-
-    if not ret:
-        break
-
-    # Flip the frame horizontally for a natural selfie view
-    frame = cv2.flip(frame, 1)
-
-    # Convert the frame to RGB as required by MediaPipe
-    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-    # Process the frame and get the hand landmarks
-    results = hands.process(rgb_frame)
-
-    current_time = time.time()
-
-    if results.multi_hand_landmarks:
-        for hand_landmarks in results.multi_hand_landmarks:
-            # Get the index, middle, and thumb tips landmarks
-            index_finger_tip = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP]
-            middle_finger_tip = hand_landmarks.landmark[mp_hands.HandLandmark.MIDDLE_FINGER_TIP]
-            thumb_tip = hand_landmarks.landmark[mp_hands.HandLandmark.THUMB_TIP]
-
-            # Convert the landmarks to pixel coordinates
+            frame = cv2.flip(frame, 1)
             height, width, _ = frame.shape
-            index_finger_coords = (int(index_finger_tip.x * width), int(index_finger_tip.y * height))
-            middle_finger_coords = (int(middle_finger_tip.x * width), int(middle_finger_tip.y * height))
-            thumb_coords = (int(thumb_tip.x * width), int(thumb_tip.y * height))
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results = hands.process(rgb_frame)
 
-            # Map the index finger coordinates to the screen size
-            screen_x = int(index_finger_tip.x * screen_width)
-            screen_y = int(index_finger_tip.y * screen_height)
-            pyautogui.moveTo(screen_x, screen_y)
+            now = time()
+            dt = max(now - prev_time, 1e-6)
+            prev_time = now
 
-            # Draw the finger landmarks on the frame
-            cv2.circle(frame, index_finger_coords, 10, (0, 0, 255), -1)
-            cv2.circle(frame, middle_finger_coords, 10, (0, 255, 0), -1)
-            cv2.circle(frame, thumb_coords, 10, (255, 0, 0), -1)
+            if results.multi_hand_landmarks:
+                hand_landmarks = results.multi_hand_landmarks[0]
 
-            # Calculate the distance between the index and middle finger tips
-            dist_index_middle = hypot(index_finger_coords[0] - middle_finger_coords[0], 
-                                      index_finger_coords[1] - middle_finger_coords[1])
+                index_tip = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP]
+                thumb_tip = hand_landmarks.landmark[mp_hands.HandLandmark.THUMB_TIP]
 
-            # Calculate the distance between the thumb and index finger
-            dist_thumb_index = hypot(thumb_coords[0] - index_finger_coords[0], 
-                                      thumb_coords[1] - index_finger_coords[1])
+                index_px = (int(index_tip.x * width), int(index_tip.y * height))
+                thumb_px = (int(thumb_tip.x * width), int(thumb_tip.y * height))
+                pinch_distance = hypot(index_px[0] - thumb_px[0], index_px[1] - thumb_px[1])
 
-            # Detect hold gesture (when thumb and index finger are close together)
-            if dist_thumb_index < CLICK_THRESHOLD:
-                # Hold the mouse button
-                pyautogui.mouseDown()
-                print("Hold detected!")
+                # Move the cursor using smoothed absolute mapping.
+                raw_x = int(index_tip.x * screen_width * MOVE_SENSITIVITY)
+                raw_y = int(index_tip.y * screen_height * MOVE_SENSITIVITY)
+                target_cursor = clamp_screen(raw_x, raw_y, screen_width, screen_height)
+                last_cursor = lerp_point(last_cursor, target_cursor, CURSOR_SMOOTHING)
+                pyautogui.moveTo(last_cursor[0], last_cursor[1])
+
+                # Hysteresis avoids rapid down/up toggling near the threshold.
+                if not mouse_down and pinch_distance < PINCH_DOWN_THRESHOLD:
+                    pyautogui.mouseDown()
+                    mouse_down = True
+                    status = "Blade ON (pinch)"
+                elif mouse_down and pinch_distance > PINCH_UP_THRESHOLD:
+                    pyautogui.mouseUp()
+                    mouse_down = False
+                    status = "Blade OFF"
+
+                # Optional slash assist when hand moves fast while not pinching.
+                if prev_index_px is not None and not mouse_down:
+                    move_dx = index_px[0] - prev_index_px[0]
+                    move_dy = index_px[1] - prev_index_px[1]
+                    distance = hypot(move_dx, move_dy)
+                    speed = distance / dt
+
+                    if (
+                        distance > SWIPE_DISTANCE_THRESHOLD
+                        and speed > SWIPE_SPEED_THRESHOLD
+                        and (now - last_swipe_time) > SWIPE_COOLDOWN
+                    ):
+                        start_x = int(last_cursor[0] - move_dx * 0.35)
+                        start_y = int(last_cursor[1] - move_dy * 0.35)
+                        start_x, start_y = clamp_screen(start_x, start_y, screen_width, screen_height)
+                        pyautogui.moveTo(start_x, start_y)
+                        pyautogui.dragTo(last_cursor[0], last_cursor[1], duration=0.06, button="left")
+                        status = f"Slash ({int(speed)} px/s)"
+                        last_swipe_time = now
+
+                prev_index_px = index_px
+
+                cv2.circle(frame, index_px, 9, (0, 0, 255), -1)
+                cv2.circle(frame, thumb_px, 9, (255, 0, 0), -1)
+                cv2.line(frame, index_px, thumb_px, (0, 255, 255), 2)
+                cv2.putText(
+                    frame,
+                    f"PinchDist: {pinch_distance:.1f}",
+                    (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (255, 255, 255),
+                    2,
+                )
             else:
-                # Release the mouse button when fingers move apart
-                pyautogui.mouseUp()
-                print("Release detected!")
+                if mouse_down:
+                    pyautogui.mouseUp()
+                    mouse_down = False
+                prev_index_px = None
+                status = "Searching hand..."
 
-            # Calculate swipe movement and velocity
-            if prev_index_finger is not None and prev_time is not None:
-                dx = index_finger_coords[0] - prev_index_finger[0]
-                dy = index_finger_coords[1] - prev_index_finger[1]
-                dist = hypot(dx, dy)
-                dt = current_time - prev_time
-                velocity = dist / (dt * 1000) if dt > 0 else 0  # pixels/ms
+            cv2.putText(frame, status, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            cv2.imshow("Fruit Ninja Hand Controller (press q to quit)", frame)
 
-                # Detect swipe gesture: fingers apart, fast movement, and cooldown
-                if (dist_index_middle > SWIPE_DISTANCE_THRESHOLD and
-                    dist > SWIPE_DISTANCE_THRESHOLD and
-                    velocity > SWIPE_VELOCITY_THRESHOLD and
-                    (current_time - last_swipe_time) > SWIPE_COOLDOWN):
-                    simulate_swipe(prev_index_finger, index_finger_coords)
-                    print(f"Swipe detected! dx={dx}, dy={dy}, velocity={velocity:.2f} px/ms")
-                    last_swipe_time = current_time
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                break
 
-            # Update the previous finger positions and time for the next frame
-            prev_index_finger = index_finger_coords
-            prev_middle_finger = middle_finger_coords
-            prev_time = current_time
+    if mouse_down:
+        pyautogui.mouseUp()
+    cap.release()
+    cv2.destroyAllWindows()
 
-    # Display the frame with hand landmarks
-    cv2.imshow("Hand Tracking with Click and Swipe Detection", frame)
 
-    # Check if 'q' key is pressed to quit
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-
-# Release the webcam and close OpenCV windows
-cap.release()
-cv2.destroyAllWindows()
+if __name__ == "__main__":
+    main()

@@ -1,68 +1,53 @@
-# 🎮 Play Subway Surfers & Fruit Ninja with Your Hand!
+﻿# Hands-Free Arcade
 
-A fun computer vision project where you control **Subway Surfers** with your **head and eyes**, and slice through **Fruit Ninja** with **hand gestures**, no keyboard or mouse needed!
+Control games with webcam gestures:
+- `subway.py`: head movement + blink controls for Subway Surfers.
+- `fruit-ninja.py`: hand tracking cursor + pinch-to-slice controls for Fruit Ninja.
 
-## 🕹️ What It Does
+## Features
+- Real-time tracking using MediaPipe.
+- Mouse/keyboard control through PyAutoGUI.
+- Built-in calibration and on-screen feedback.
+- Improved gesture stability with cooldowns and smoothing.
 
-* 🧠 **Subway Surfers**: Move left, right, jump, crouch, and activate skate using **head tilts** and **eye blinks**.
-* ✋ **Fruit Ninja**: Use your **index finger and thumb** to swipe and click as if you're slicing fruit with your hand.
+## Requirements
+- Python 3.9 to 3.11 recommended.
+- A working webcam.
+- Good front lighting.
+- Game window visible and focused.
 
-## ✨ Features
+## Install
+```bash
+pip install -r requirements.txt
+```
 
-* Real-time **hand and face tracking** using MediaPipe
-* Smooth interaction with games via PyAutoGUI
-* Easy calibration and sensitivity settings
-* Visual feedback and gesture detection overlays
+## Run
+```bash
+python subway.py
+python fruit-ninja.py
+```
 
-## 🛠️ Tech Stack
+## Controls
+### Subway (`subway.py`)
+- Tilt head left/right -> move lanes.
+- Raise head -> jump.
+- Lower head -> crouch.
+- Blink (left eye ratio threshold) -> double click for skate trigger.
 
-* Python
-* OpenCV
-* MediaPipe
-* PyAutoGUI
-* NumPy
+The script calibrates a neutral pose for a few seconds at startup.
 
-## 📁 Files
+### Fruit Ninja (`fruit-ninja.py`)
+- Index fingertip moves the cursor.
+- Pinch thumb + index -> hold mouse button (blade on).
+- Release pinch -> mouse button up.
+- Fast movement can trigger a short assisted slash.
 
-* `subway.py` — control Subway Surfers using face and eyes
-* `fruit-ninja.py` — control Fruit Ninja using hand gestures
+Press `q` to quit Fruit Ninja controller, `Esc` to quit Subway controller.
 
-## 📦 Installation
+## Troubleshooting
+- If cursor/key events do not affect the game, click into the game window first.
+- If gestures are too sensitive, reduce constants at the top of each script.
+- If camera cannot open, check privacy permissions and close apps already using the webcam.
 
-1. Clone the repository:
-
-   ```bash
-   git clone https://github.com/Joseph-elias/gaming.git
-   cd gaming
-   ```
-
-2. Install dependencies:
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. Run the desired script:
-
-   ```bash
-   python subway.py       # For Subway Surfers
-   python fruit-ninja.py  # For Fruit Ninja
-   ```
-
-## 🖥️ Requirements
-
-* Webcam
-* Python 3.7+
-* Games: Subway Surfers (PC version or emulator), Fruit Ninja (emulator or browser)
-
-## 🧪 Tips
-
-* Make sure your face or hand is clearly visible in a well-lit environment.
-* Subway Surfers will ask you to hold a neutral face for a few seconds to calibrate.
-* For Fruit Ninja, move your index finger like a cursor, and "click" by pinching your thumb and index together.
-
-
-## 📄 License
-
-No formal license — this is just a fun project shared for learning and entertainment.
-Feel free to explore, learn from, or remix it!
+## Notes
+This project is for local use and experimentation.
