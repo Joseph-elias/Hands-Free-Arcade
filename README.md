@@ -1,6 +1,6 @@
 # 🎮 Play Subway Surfers & Fruit Ninja with Your Hand!
 
-A fun computer vision project where you control **Subway Surfers** with your **head and eyes**, and slice through **Fruit Ninja** with **hand gestures** — no keyboard or mouse needed!
+A fun computer vision project where you control **Subway Surfers** with your **head and eyes**, and slice through **Fruit Ninja** with **hand gestures**, no keyboard or mouse needed!
 
 ## 🕹️ What It Does
 
