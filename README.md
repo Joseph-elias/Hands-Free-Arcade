@@ -1,4 +1,4 @@
-﻿# 🎮 Hands-Free Arcade
+# 🎮 Hands-Free Arcade
 
 Play games with your **body movements** instead of keyboard/mouse!
 
@@ -76,4 +76,4 @@ At startup it calibrates your neutral face for a few seconds.
 
 ## ❤️ Note
 
-This is a creative, fun CV project from your pre-AI coding era, now cleaned up and refined.
+This is a creative, fun CV project from pre-AI coding era, now cleaned up and refined.
